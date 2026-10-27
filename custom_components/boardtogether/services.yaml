@@ -1,0 +1,11 @@
+send_test_notification:
+  name: Send test notification
+  description: Send a test BoardTogether turn notification email using the configured notification service (including your current games waiting on you).
+
+send_waiting_games_digest:
+  name: Send waiting games digest
+  description: Refresh active games from BoardTogether and email a summary of all games currently waiting on you and how long each has been waiting.
+
+refresh_games:
+  name: Refresh active games
+  description: Immediately refresh the list of active and waiting games from boardtogether.games.

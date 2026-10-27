@@ -1,0 +1,11 @@
+{
+  "domain": "boardtogether",
+  "name": "BoardTogether",
+  "codeowners": ["@ckarlof"],
+  "config_flow": true,
+  "documentation": "https://github.com/ckarlof/email-notifications",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/ckarlof/email-notifications/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

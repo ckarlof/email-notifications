@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to BoardTogether",
+        "description": "Sign in with your boardtogether.games account to receive Web Push turn notifications by email and track all games waiting on you.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "notify_service": "Notification Service (e.g., notify.chris_karlof_email)",
+          "dedupe_mode": "Notification Frequency",
+          "only_turn_notifications": "Only send 'It's your turn' notifications",
+          "include_waiting_digest": "Include summary of all games waiting on you in each email",
+          "base_url": "BoardTogether Site URL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to BoardTogether",
+      "invalid_auth": "Invalid username or password",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Account is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BoardTogether Notification Options",
+        "data": {
+          "notify_service": "Notification Service (e.g., notify.chris_karlof_email)",
+          "dedupe_mode": "Notification Frequency",
+          "only_turn_notifications": "Only send 'It's your turn' notifications",
+          "include_waiting_digest": "Include summary of all games waiting on you in each email"
+        }
+      }
+    }
+  }
+}
