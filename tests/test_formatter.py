@@ -56,6 +56,40 @@ def _sample_snapshot():
     )
 
 
+def test_format_is_your_turn_default_no_digest() -> None:
+    """Test formatting an isYourTurn notification with default include_waiting_digest=False."""
+    snapshot = _sample_snapshot()
+    payload = {
+        "id": "notif-99",
+        "type": "user",
+        "action": "isYourTurn",
+        "data": {
+            "user": {"id": "user-1"},
+            "game": {
+                "id": "game-1",
+                "typeId": "indonesia",
+                "name": "Evening Indonesia",
+            },
+        },
+    }
+    formatted = format_user_notification(
+        payload=payload,
+        base_url="https://boardtogether.games",
+        snapshot=snapshot,
+    )
+    assert formatted is not None
+    assert (
+        formatted.title
+        == "[BoardTogether] It's your turn in Evening Indonesia (Indonesia) — after Alice, Oct 26 10:30 UTC"
+    )
+    assert "Waiting on you: 4h 30m" in formatted.message
+    assert "Last move by: Alice" in formatted.message
+    assert "Take your turn: https://boardtogether.games/game/game-1" in formatted.message
+    assert "Games currently waiting on you" not in formatted.message
+    assert formatted.turn_dedupe_key == "isYourTurn:game-1:2026-10-26T10:30:00+00:00"
+    assert formatted.legacy_turn_dedupe_key == "isYourTurn:game-1:2026-10-26T10:30:00Z"
+
+
 def test_format_is_your_turn_with_waiting_digest() -> None:
     """Test formatting an isYourTurn notification including the waiting games digest."""
     snapshot = _sample_snapshot()
@@ -79,13 +113,16 @@ def test_format_is_your_turn_with_waiting_digest() -> None:
         include_waiting_digest=True,
     )
     assert formatted is not None
-    assert formatted.title == "[BoardTogether] It's your turn in Evening Indonesia (Indonesia)"
+    assert (
+        formatted.title
+        == "[BoardTogether] It's your turn in Evening Indonesia (Indonesia) — after Alice, Oct 26 10:30 UTC"
+    )
     assert "Waiting on you: 4h 30m" in formatted.message
     assert "Last move by: Alice" in formatted.message
     assert "Take your turn: https://boardtogether.games/game/game-1" in formatted.message
     assert "Games currently waiting on you (2):" in formatted.message
     assert "1. Railroad Showdown [1846] vs. Bob — Your Turn, waiting 1d" in formatted.message
-    assert formatted.turn_dedupe_key == "isYourTurn:game-1:2026-10-26T10:30:00Z"
+    assert formatted.turn_dedupe_key == "isYourTurn:game-1:2026-10-26T10:30:00+00:00"
 
 
 def test_format_all_other_notification_actions() -> None:

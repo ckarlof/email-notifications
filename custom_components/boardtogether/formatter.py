@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .api import GamesSnapshot, WaitingGame
+from .api import GamesSnapshot, WaitingGame, parse_iso_timestamp
 from .const import (
     ACTION_GAME_STARTED,
     ACTION_IS_YOUR_TURN,
@@ -32,6 +32,7 @@ class FormattedNotification:
     game_title: str
     url: str
     turn_dedupe_key: str
+    legacy_turn_dedupe_key: str | None = None
 
     def to_event_dict(self) -> dict[str, Any]:
         """Serialize for the Home Assistant event bus and sensor state attributes."""
@@ -125,7 +126,7 @@ def format_user_notification(
     payload: dict[str, Any],
     base_url: str = DEFAULT_BASE_URL,
     snapshot: GamesSnapshot | None = None,
-    include_waiting_digest: bool = True,
+    include_waiting_digest: bool = False,
 ) -> FormattedNotification | None:
     """Format a BoardTogether UserNotification JSON envelope into email title and message."""
     if not isinstance(payload, dict) or payload.get("type") != "user":
@@ -165,13 +166,29 @@ def format_user_notification(
         )
         raw_game = snapshot.raw_games_by_id.get(game_id)
 
+    # Extract and canonicalize turn timestamp
+    raw_last_action = ""
+    if raw_game and raw_game.get("lastActionAt"):
+        raw_last_action = str(raw_game["lastActionAt"])
+    elif waiting_entry and waiting_entry.waiting_since:
+        raw_last_action = waiting_entry.waiting_since
+
+    parsed_ts = parse_iso_timestamp(raw_last_action)
+    canonical_ts = parsed_ts.isoformat() if parsed_ts else raw_last_action
+
     title: str
     summary: str
     target_url: str
     action_label: str
 
     if action == ACTION_IS_YOUR_TURN:
-        title = f"[BoardTogether] It's your turn in {game_name} ({game_title})"
+        suffix_parts: list[str] = []
+        if waiting_entry and waiting_entry.last_action_by:
+            suffix_parts.append(f"after {waiting_entry.last_action_by}")
+        if parsed_ts is not None:
+            suffix_parts.append(parsed_ts.strftime("%b %d %H:%M UTC"))
+        suffix = f" — {', '.join(suffix_parts)}" if suffix_parts else ""
+        title = f"[BoardTogether] It's your turn in {game_name} ({game_title}){suffix}"
         summary = f"It's your turn in game {game_name}"
         target_url = game_url
         action_label = "Take your turn"
@@ -216,16 +233,15 @@ def format_user_notification(
     else:
         return None
 
-    # Build turn deduplication key from game_id + lastActionAt (or notification_id fallback)
-    last_action_at = ""
-    if raw_game and raw_game.get("lastActionAt"):
-        last_action_at = str(raw_game["lastActionAt"])
-    elif waiting_entry and waiting_entry.waiting_since:
-        last_action_at = waiting_entry.waiting_since
     turn_dedupe_key = (
-        f"{action}:{game_id}:{last_action_at}"
-        if last_action_at
-        else f"{action}:{game_id}:{notification_id}"
+        f"{action}:{game_id}:{canonical_ts}"
+        if canonical_ts
+        else f"{action}:{game_id}"
+    )
+    legacy_turn_dedupe_key = (
+        f"{action}:{game_id}:{raw_last_action}"
+        if raw_last_action and raw_last_action != canonical_ts
+        else None
     )
 
     body_lines = [
@@ -269,4 +285,5 @@ def format_user_notification(
         game_title=game_title,
         url=target_url,
         turn_dedupe_key=turn_dedupe_key,
+        legacy_turn_dedupe_key=legacy_turn_dedupe_key,
     )

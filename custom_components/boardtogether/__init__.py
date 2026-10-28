@@ -141,14 +141,25 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
         """Persist Autopush and deduplication state to Home Assistant .storage."""
         await self.store.async_save(state.to_dict())
 
+    async def async_seed_current_waiting_turns(self) -> None:
+        """Seed seen_turn_keys with currently active waiting turns on startup if not yet recorded."""
+        if not self.data:
+            return
+        changed = False
+        for wg in self.data.waiting_games:
+            if wg.waiting_reason == "Your Turn" and wg.waiting_since:
+                turn_key = f"{ACTION_IS_YOUR_TURN}:{wg.game_id}:{wg.waiting_since}"
+                if turn_key not in self.autopush_state.seen_turn_keys:
+                    self.autopush_state.mark_notification_seen(None, turn_key)
+                    changed = True
+        if changed:
+            await self.async_save_state(self.autopush_state)
+
     async def async_handle_push_notification(
         self, payload: dict[str, Any], force_send: bool = False
     ) -> None:
         """Process a decrypted Web Push notification payload from BoardTogether."""
         _LOGGER.debug("Received BoardTogether push payload: %s", payload)
-
-        # Refresh active games first so waiting times & turn details are completely up to date
-        await self.async_request_refresh()
 
         action = str(payload.get("action") or "")
         if not force_send and self.only_turn_notifications and action != ACTION_IS_YOUR_TURN:
@@ -158,10 +169,40 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
             )
             return
 
+        # Fetch a fresh un-debounced games snapshot so we verify real-time turn state
+        snapshot = self.data
+        try:
+            snapshot = await self.client.async_get_games_snapshot()
+            self.async_set_updated_data(snapshot)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not fetch live games snapshot on push notification (%s); falling back to cached snapshot",
+                err,
+            )
+
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        game_obj = data.get("game") if isinstance(data.get("game"), dict) else {}
+        game_id = str(game_obj.get("id") or "")
+
+        # Strict false-positive guard: for isYourTurn, confirm the game is ACTUALLY waiting on the user right now
+        if not force_send and action == ACTION_IS_YOUR_TURN and snapshot is not None and game_id:
+            active_turn_ids = {
+                wg.game_id
+                for wg in snapshot.waiting_games
+                if wg.waiting_reason == "Your Turn"
+            }
+            if game_id not in active_turn_ids:
+                _LOGGER.info(
+                    "Dropping stale isYourTurn notification for game %s (%s): game is no longer waiting on user",
+                    game_obj.get("name") or game_id,
+                    game_id,
+                )
+                return
+
         formatted = format_user_notification(
             payload=payload,
             base_url=self.client.base_url,
-            snapshot=self.data,
+            snapshot=snapshot,
             include_waiting_digest=self.include_waiting_digest,
         )
         if formatted is None:
@@ -177,14 +218,25 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
                     "Skipping duplicate notification_id %s", formatted.notification_id
                 )
                 return
-            if (
-                self.dedupe_mode == DEDUPE_MODE_TURN
-                and formatted.turn_dedupe_key in self.autopush_state.seen_turn_keys
-            ):
-                _LOGGER.debug(
-                    "Skipping already-notified turn %s", formatted.turn_dedupe_key
-                )
-                return
+            if self.dedupe_mode == DEDUPE_MODE_TURN:
+                seen_turns = set(self.autopush_state.seen_turn_keys)
+                if (
+                    formatted.turn_dedupe_key in seen_turns
+                    or (
+                        formatted.legacy_turn_dedupe_key
+                        and formatted.legacy_turn_dedupe_key in seen_turns
+                    )
+                ):
+                    _LOGGER.info(
+                        "Skipping reminder for already-notified turn %s (notification_id=%s)",
+                        formatted.turn_dedupe_key,
+                        formatted.notification_id,
+                    )
+                    self.autopush_state.mark_notification_seen(
+                        formatted.notification_id, formatted.turn_dedupe_key
+                    )
+                    await self.async_save_state(self.autopush_state)
+                    return
 
         now_iso = datetime.now(timezone.utc).isoformat()
         event_data = {
@@ -263,6 +315,38 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
         await self.async_handle_push_notification(sample_payload, force_send=True)
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old config entries to the latest version."""
+    _LOGGER.info(
+        "Migrating BoardTogether config entry %s from version %s",
+        config_entry.entry_id,
+        config_entry.version,
+    )
+    if config_entry.version == 1:
+        new_data = {
+            **config_entry.data,
+            CONF_DEDUPE_MODE: DEDUPE_MODE_TURN,
+            CONF_INCLUDE_WAITING_DIGEST: False,
+        }
+        new_options = dict(config_entry.options)
+        if CONF_DEDUPE_MODE in new_options:
+            new_options[CONF_DEDUPE_MODE] = DEDUPE_MODE_TURN
+        if CONF_INCLUDE_WAITING_DIGEST in new_options:
+            new_options[CONF_INCLUDE_WAITING_DIGEST] = False
+
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=new_data,
+            options=new_options,
+            version=2,
+        )
+        _LOGGER.info(
+            "Migrated BoardTogether config entry %s to version 2 (dedupe_mode=turn, include_waiting_digest=False)",
+            config_entry.entry_id,
+        )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BoardTogether from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -299,6 +383,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         autopush_state=autopush_state,
     )
     await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_seed_current_waiting_turns()
     await coordinator.async_start_autopush()
 
     hass.data[DOMAIN][entry.entry_id] = coordinator

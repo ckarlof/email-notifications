@@ -53,7 +53,7 @@ def _get_notify_service_options(hass: HomeAssistant) -> list[str]:
 class BoardTogetherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BoardTogether."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -130,8 +130,8 @@ class BoardTogetherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DEDUPE_MODE, default=DEFAULT_DEDUPE_MODE
                 ): vol.In(
                     {
-                        DEDUPE_MODE_NOTIFICATION_ID: "Every notification & reminder (notification_id)",
-                        DEDUPE_MODE_TURN: "Once per turn (turn)",
+                        DEDUPE_MODE_TURN: "Once per turn (recommended)",
+                        DEDUPE_MODE_NOTIFICATION_ID: "Every notification & reminder (1m, +1h, +4h, +8h, +12h)",
                     }
                 ),
                 vol.Optional(
@@ -187,8 +187,8 @@ class BoardTogetherOptionsFlowHandler(config_entries.OptionsFlow):
                     default=current.get(CONF_DEDUPE_MODE, DEFAULT_DEDUPE_MODE),
                 ): vol.In(
                     {
-                        DEDUPE_MODE_NOTIFICATION_ID: "Every notification & reminder (notification_id)",
-                        DEDUPE_MODE_TURN: "Once per turn (turn)",
+                        DEDUPE_MODE_TURN: "Once per turn (recommended)",
+                        DEDUPE_MODE_NOTIFICATION_ID: "Every notification & reminder (1m, +1h, +4h, +8h, +12h)",
                     }
                 ),
                 vol.Optional(
