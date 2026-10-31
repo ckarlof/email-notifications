@@ -3,7 +3,7 @@
 A custom Home Assistant integration (`custom_components/boardtogether`) for [boardtogether.games](https://boardtogether.games) that:
 
 1. **Subscribes to Web Push Notifications (Zero Open Ports):** Connects outbound to Mozilla's standard Web Push relay (`wss://push.services.mozilla.com/`), registers a Web Push subscription with your `boardtogether.games` account, and decrypts incoming notifications (`isYourTurn`, `gameStarted`, `wasInvited`, `playerJoined`, `playerDeclined`, `playerVoteRequested`) in real time.
-2. **Sends Rich Turn Notification Emails:** Calls your Home Assistant email notification service (defaults to `notify.chris_karlof_email`) with a direct link to the game (`https://boardtogether.games/game/<id>`) and a digest of **all games currently waiting on you** and how long each has been waiting.
+2. **Sends Rich Turn Notification Emails:** Calls your Home Assistant email notification service (defaults to `notify.chris_karlof_email_chris_karlof_gmail_com`) with a direct link to the game (`https://boardtogether.games/game/<id>`) and a digest of **all games currently waiting on you** and how long each has been waiting.
 3. **Tracks All Games Waiting on You & Wait Times:** Polls `GET /api/v1/games/mine?scope=current` every 2 minutes (and immediately on every Web Push) to expose sensors for pending moves, wait durations, and a pre-rendered Lovelace Markdown table.
 
 ---
@@ -22,7 +22,7 @@ A custom Home Assistant integration (`custom_components/boardtogether`) for [boa
 
 During setup (or anytime via **Configure** on the integration entry), you can customize:
 * **Username / Password:** Your `boardtogether.games` login credentials.
-* **Notification Service:** Defaults to `notify.chris_karlof_email`.
+* **Notification Service:** Defaults to `notify.chris_karlof_email_chris_karlof_gmail_com`.
 * **Notification Frequency (`dedupe_mode`):**
   * `notification_id` *(default)*: Emails you on every push notification sent by BoardTogether (initial 60s turn notice + scheduled 1h/4h/8h/12h reminders when you haven't moved yet).
   * `turn`: Only emails you **once per turn**, suppressing follow-up reminders for the same turn.

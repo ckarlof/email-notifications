@@ -32,19 +32,23 @@ from .const import (
     DEFAULT_NOTIFY_SERVICE,
     DEFAULT_ONLY_TURN_NOTIFICATIONS,
     DOMAIN,
+    LEGACY_NOTIFY_SERVICE_MAP,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _get_notify_service_options(hass: HomeAssistant) -> list[str]:
-    """Return a list of available notify.<service> strings in Home Assistant."""
+    """Return a list of available notify.<entity_or_service> targets in Home Assistant."""
+    entity_ids = sorted(hass.states.async_entity_ids("notify"))
     services = hass.services.async_services().get("notify", {})
-    options = [
+    service_options = [
         f"notify.{svc}"
         for svc in sorted(services.keys())
-        if svc not in ("send_message",)
+        if svc not in ("send_message", "notify")
+        and f"notify.{svc}" not in LEGACY_NOTIFY_SERVICE_MAP
     ]
+    options = list(dict.fromkeys([*entity_ids, *service_options]))
     if DEFAULT_NOTIFY_SERVICE not in options:
         options.insert(0, DEFAULT_NOTIFY_SERVICE)
     return options
@@ -53,7 +57,7 @@ def _get_notify_service_options(hass: HomeAssistant) -> list[str]:
 class BoardTogetherConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BoardTogether."""
 
-    VERSION = 2
+    VERSION = 3
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

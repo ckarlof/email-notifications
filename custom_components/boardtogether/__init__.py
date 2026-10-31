@@ -35,6 +35,7 @@ from .const import (
     DEFAULT_ONLY_TURN_NOTIFICATIONS,
     DOMAIN,
     EVENT_NOTIFICATION,
+    LEGACY_NOTIFY_SERVICE_MAP,
     SERVICE_REFRESH_GAMES,
     SERVICE_SEND_TEST_NOTIFICATION,
     SERVICE_SEND_WAITING_GAMES_DIGEST,
@@ -84,8 +85,9 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
 
     @property
     def notify_service(self) -> str:
-        """Return configured notify service string (e.g. 'notify.chris_karlof_email')."""
-        return str(self._get_option(CONF_NOTIFY_SERVICE, DEFAULT_NOTIFY_SERVICE)).strip()
+        """Return configured notify target string (e.g. 'notify.chris_karlof_email_chris_karlof_gmail_com')."""
+        raw = str(self._get_option(CONF_NOTIFY_SERVICE, DEFAULT_NOTIFY_SERVICE)).strip()
+        return LEGACY_NOTIFY_SERVICE_MAP.get(raw, raw)
 
     @property
     def dedupe_mode(self) -> str:
@@ -259,7 +261,7 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
         await self.async_send_notify(title=formatted.title, message=formatted.message)
 
     async def async_send_notify(self, title: str, message: str) -> None:
-        """Send an email/notification using the configured Home Assistant notify service."""
+        """Send an email/notification using notify.send_message (entity target) or a legacy notify service."""
         service_full = self.notify_service
         if not service_full:
             return
@@ -267,6 +269,20 @@ class BoardTogetherCoordinator(DataUpdateCoordinator[GamesSnapshot]):
             domain, service_name = service_full.split(".", 1)
         else:
             domain, service_name = "notify", service_full
+
+        entity_candidate = f"{domain}.{service_name}"
+        if domain == "notify" and (
+            self.hass.states.get(entity_candidate) is not None
+            or not self.hass.services.has_service(domain, service_name)
+        ):
+            await self.hass.services.async_call(
+                "notify",
+                "send_message",
+                {"title": title, "message": message},
+                target={"entity_id": entity_candidate},
+                blocking=True,
+            )
+            return
 
         await self.hass.services.async_call(
             domain,
@@ -322,27 +338,35 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         config_entry.entry_id,
         config_entry.version,
     )
-    if config_entry.version == 1:
-        new_data = {
-            **config_entry.data,
-            CONF_DEDUPE_MODE: DEDUPE_MODE_TURN,
-            CONF_INCLUDE_WAITING_DIGEST: False,
-        }
-        new_options = dict(config_entry.options)
+    new_data = dict(config_entry.data)
+    new_options = dict(config_entry.options)
+
+    if config_entry.version < 2:
+        new_data[CONF_DEDUPE_MODE] = DEDUPE_MODE_TURN
+        new_data[CONF_INCLUDE_WAITING_DIGEST] = False
         if CONF_DEDUPE_MODE in new_options:
             new_options[CONF_DEDUPE_MODE] = DEDUPE_MODE_TURN
         if CONF_INCLUDE_WAITING_DIGEST in new_options:
             new_options[CONF_INCLUDE_WAITING_DIGEST] = False
 
+    if config_entry.version < 3:
+        raw_data_svc = str(new_data.get(CONF_NOTIFY_SERVICE, "")).strip()
+        if raw_data_svc in LEGACY_NOTIFY_SERVICE_MAP:
+            new_data[CONF_NOTIFY_SERVICE] = LEGACY_NOTIFY_SERVICE_MAP[raw_data_svc]
+        raw_opt_svc = str(new_options.get(CONF_NOTIFY_SERVICE, "")).strip()
+        if raw_opt_svc in LEGACY_NOTIFY_SERVICE_MAP:
+            new_options[CONF_NOTIFY_SERVICE] = LEGACY_NOTIFY_SERVICE_MAP[raw_opt_svc]
+
         hass.config_entries.async_update_entry(
             config_entry,
             data=new_data,
             options=new_options,
-            version=2,
+            version=3,
         )
         _LOGGER.info(
-            "Migrated BoardTogether config entry %s to version 2 (dedupe_mode=turn, include_waiting_digest=False)",
+            "Migrated BoardTogether config entry %s to version 3 (notify_service=%s)",
             config_entry.entry_id,
+            new_options.get(CONF_NOTIFY_SERVICE) or new_data.get(CONF_NOTIFY_SERVICE),
         )
     return True
 

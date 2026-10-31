@@ -13,7 +13,11 @@ DEFAULT_AUTOPUSH_URL = "wss://push.services.mozilla.com/"
 DEFAULT_VAPID_PUBLIC_KEY = (
     "BAyfrK5NRNfun8M7Zug28V5nk6Y7a_LB8ha1EkRW-b6MU_p9tF5_rV0j1MYa-omqo1SSOdtpGfvUbtt24wDYwFA"
 )
-DEFAULT_NOTIFY_SERVICE = "notify.chris_karlof_email"
+DEFAULT_NOTIFY_SERVICE = "notify.chris_karlof_email_chris_karlof_gmail_com"
+LEGACY_NOTIFY_SERVICE_MAP = {
+    "notify.chris_karlof_email": "notify.chris_karlof_email_chris_karlof_gmail_com",
+    "chris_karlof_email": "notify.chris_karlof_email_chris_karlof_gmail_com",
+}
 
 CONF_BASE_URL = "base_url"
 CONF_NOTIFY_SERVICE = "notify_service"

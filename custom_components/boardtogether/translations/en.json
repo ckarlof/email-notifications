@@ -7,7 +7,7 @@
         "data": {
           "username": "Username",
           "password": "Password",
-          "notify_service": "Notification Service (e.g., notify.chris_karlof_email)",
+          "notify_service": "Notification Target (e.g., notify.chris_karlof_email_chris_karlof_gmail_com)",
           "dedupe_mode": "Notification Frequency",
           "only_turn_notifications": "Only send 'It's your turn' notifications",
           "include_waiting_digest": "Include summary of all games waiting on you in each email",
@@ -29,7 +29,7 @@
       "init": {
         "title": "BoardTogether Notification Options",
         "data": {
-          "notify_service": "Notification Service (e.g., notify.chris_karlof_email)",
+          "notify_service": "Notification Target (e.g., notify.chris_karlof_email_chris_karlof_gmail_com)",
           "dedupe_mode": "Notification Frequency",
           "only_turn_notifications": "Only send 'It's your turn' notifications",
           "include_waiting_digest": "Include summary of all games waiting on you in each email"
